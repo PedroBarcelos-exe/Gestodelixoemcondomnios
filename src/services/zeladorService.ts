@@ -1,4 +1,4 @@
-from { api, isApiOnline } from './api';
+import { api, isApiOnline } from './api';
 
 export interface ZeladorTask {
   id: string;
