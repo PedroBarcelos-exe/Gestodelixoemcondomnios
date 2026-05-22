@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Leaf, Recycle } from 'lucide-react';
+import { authService } from '../../services/authService';
 
 export type UserRole = 'morador' | 'zelador' | 'sindico';
 
@@ -15,12 +16,16 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('morador');
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem('userRole', role);
-    localStorage.setItem('userName', email.split('@')[0]);
-    navigate(`/dashboard/${role}`);
+    try {
+      await authService.login(email, role);
+      navigate(`/dashboard/${role}`);
+    } catch (error) {
+      console.error(error);
+    }
   };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-950 via-green-900 to-green-800 p-4 relative overflow-hidden">

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Package, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -8,47 +8,47 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Alert, AlertDescription } from './ui/alert';
 import { Badge } from './ui/badge';
+import { moradorService } from '../../services/moradorService';
 
 export function SchedulePickup() {
   const [itemType, setItemType] = useState('');
   const [description, setDescription] = useState('');
   const [preferredDate, setPreferredDate] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [mySchedules, setMySchedules] = useState<any[]>([]);
 
-  const [mySchedules, setMySchedules] = useState([
-    {
-      id: 1,
-      item: 'Mesa de jantar',
-      date: '2026-05-20',
-      status: 'pending',
-      description: 'Mesa de madeira 6 lugares'
-    },
-    {
-      id: 2,
-      item: 'Colchão',
-      date: '2026-05-18',
-      status: 'approved',
-      description: 'Colchão de solteiro'
-    },
-  ]);
+  useEffect(() => {
+    const loadSchedules = async () => {
+      try {
+        const data = await moradorService.getAgendamentos();
+        // Mapear campos do backend para manter compatibilidade com o JSX do frontend
+        const mapped = data.map(s => ({
+          id: s.id,
+          item: s.tipo_item.charAt(0).toUpperCase() + s.tipo_item.slice(1),
+          date: s.data_agendada || s.data_preferencial,
+          status: s.status,
+          description: s.description
+        }));
+        setMySchedules(mapped);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    loadSchedules();
+  }, [submitted]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMySchedules([
-      {
-        id: Date.now(),
-        item: itemType,
-        date: preferredDate,
-        status: 'pending',
-        description: description
-      },
-      ...mySchedules
-    ]);
-    setSubmitted(true);
-    setItemType('');
-    setDescription('');
-    setPreferredDate('');
-    setTimeout(() => setSubmitted(false), 5000);
+    try {
+      await moradorService.criarAgendamento(itemType, description, preferredDate);
+      setSubmitted(true);
+      setItemType('');
+      setDescription('');
+      setPreferredDate('');
+      setTimeout(() => setSubmitted(false), 5000);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const getStatusBadge = (status: string) => {

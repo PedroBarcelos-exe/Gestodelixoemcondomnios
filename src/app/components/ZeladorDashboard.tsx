@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CheckCircle, Clock, Package, LogOut, Wrench, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
@@ -7,40 +7,94 @@ import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Checkbox } from './ui/checkbox';
 import { CollectionCalendar } from './CollectionCalendar';
+import { zeladorService, ZeladorTask, PickupRequest } from '../../services/zeladorService';
+import { toast } from 'sonner';
 
 export function ZeladorDashboard() {
   const navigate = useNavigate();
   const userName = localStorage.getItem('userName') || 'Zelador';
   const [activeTab, setActiveTab] = useState('tasks');
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ tarefas_total: 0, tarefas_concluidas: 0, agendamentos_pendentes: 0, alertas: 0 });
+  const [pickupRequests, setPickupRequests] = useState<PickupRequest[]>([]);
+  const [todayTasks, setTodayTasks] = useState<ZeladorTask[]>([]);
 
   const handleLogout = () => {
     localStorage.clear();
     navigate('/login');
   };
 
-  const [pickupRequests, setPickupRequests] = useState([
-    { id: 1, apt: '301', item: 'Sofá 3 lugares', status: 'pending', date: '2026-05-15', requester: 'João Silva' },
-    { id: 2, apt: '205', item: 'Geladeira', status: 'pending', date: '2026-05-16', requester: 'Maria Santos' },
-    { id: 3, apt: '102', item: 'Colchão', status: 'completed', date: '2026-05-13', requester: 'Pedro Costa' },
-  ]);
-
-  const [todayTasks, setTodayTasks] = useState([
-    { id: 1, task: 'Organizar área de coleta seletiva', completed: true },
-    { id: 2, task: 'Verificar lixeiras do térreo', completed: true },
-    { id: 3, task: 'Preparar área para coleta de orgânicos', completed: false },
-    { id: 4, task: 'Retirar sofá do apto 301', completed: false },
-  ]);
-
-  const toggleTask = (taskId: number) => {
-    setTodayTasks(tasks =>
-      tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t)
-    );
+  const loadData = async () => {
+    try {
+      const [tasksRes, pickupsRes, statsRes] = await Promise.all([
+        zeladorService.getTasks(),
+        zeladorService.getPickupRequests(),
+        zeladorService.getStats()
+      ]);
+      setTodayTasks(tasksRes);
+      setPickupRequests(pickupsRes);
+      setStats(statsRes);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const completePickup = (id: number) => {
-    setPickupRequests(requests =>
-      requests.map(r => r.id === id ? { ...r, status: 'completed' } : r)
-    );
+  useEffect(() => {
+    loadData();
+  }, [activeTab]);
+
+  const handleToggleTask = async (taskId: string, currentCompleted: boolean) => {
+    try {
+      const nextCompleted = !currentCompleted;
+      
+      // Optimistic update
+      setTodayTasks(tasks =>
+        tasks.map(t => t.id === taskId ? { ...t, completed: nextCompleted } : t)
+      );
+      
+      await zeladorService.toggleTask(taskId, nextCompleted);
+      toast.success("Tarefa atualizada!");
+      
+      // Reload stats
+      const statsRes = await zeladorService.getStats();
+      setStats(statsRes);
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao atualizar tarefa");
+      // Rollback
+      setTodayTasks(tasks =>
+        tasks.map(t => t.id === taskId ? { ...t, completed: currentCompleted } : t)
+      );
+    }
+  };
+
+  const handleCompletePickup = async (id: string) => {
+    try {
+      // Optimistic update
+      setPickupRequests(requests =>
+        requests.map(r => r.id === id ? { ...r, status: 'completed' } : r)
+      );
+      
+      await zeladorService.completePickup(id);
+      toast.success("Coleta concluída com sucesso!");
+      
+      // Reload
+      const [pickupsRes, statsRes] = await Promise.all([
+        zeladorService.getPickupRequests(),
+        zeladorService.getStats()
+      ]);
+      setPickupRequests(pickupsRes);
+      setStats(statsRes);
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao concluir coleta");
+      // Rollback status
+      setPickupRequests(requests =>
+        requests.map(r => r.id === id ? { ...r, status: 'pending' } : r)
+      );
+    }
   };
 
   const pendingCount = pickupRequests.filter(r => r.status === 'pending').length;
@@ -140,13 +194,13 @@ export function ZeladorDashboard() {
                       <Checkbox
                         id={`task-${task.id}`}
                         checked={task.completed}
-                        onCheckedChange={() => toggleTask(task.id)}
+                        onCheckedChange={() => handleToggleTask(task.id, task.completed)}
                       />
                       <label
                         htmlFor={`task-${task.id}`}
                         className={`flex-1 cursor-pointer ${task.completed ? 'line-through text-gray-500' : ''}`}
                       >
-                        {task.task}
+                        {task.descricao}
                       </label>
                       {task.completed && (
                         <CheckCircle className="w-5 h-5 text-green-600" />
@@ -191,7 +245,7 @@ export function ZeladorDashboard() {
                         {request.status === 'pending' && (
                           <Button
                             size="sm"
-                            onClick={() => completePickup(request.id)}
+                            onClick={() => handleCompletePickup(request.id)}
                             className="bg-green-600 hover:bg-green-700"
                           >
                             <CheckCircle className="w-4 h-4 mr-2" />

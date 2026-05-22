@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Package, TrendingUp, Trash2, LogOut, Home } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
@@ -9,11 +9,32 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { CollectionCalendar } from './CollectionCalendar';
 import { SchedulePickup } from './SchedulePickup';
 import { ImpactStats } from './ImpactStats';
+import { moradorService, DashboardData } from '../../services/moradorService';
+import { ChatbotWidget } from './ChatbotWidget';
 
 export function MoradorDashboard() {
   const navigate = useNavigate();
-  const userName = localStorage.getItem('userName') || 'Morador';
+  const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Morador');
   const [activeTab, setActiveTab] = useState('overview');
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const data = await moradorService.getDashboard();
+        setDashboardData(data);
+        if (data.nome) {
+          setUserName(data.nome);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [activeTab]);
 
   const handleLogout = () => {
     localStorage.clear();
@@ -25,6 +46,7 @@ export function MoradorDashboard() {
     { type: 'Reciclável', date: '2026-05-16', day: 'Sexta', color: 'bg-blue-500' },
     { type: 'Rejeito', date: '2026-05-17', day: 'Sábado', color: 'bg-gray-500' },
   ];
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-green-50">
@@ -67,10 +89,12 @@ export function MoradorDashboard() {
                   <TrendingUp className="h-4 w-4 text-green-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-green-600">87%</div>
-                  <Progress value={87} className="mt-2" />
+                  <div className="text-2xl font-bold text-green-600">
+                    {dashboardData?.meta_mensal_pct ?? 87}%
+                  </div>
+                  <Progress value={dashboardData?.meta_mensal_pct ?? 87} className="mt-2" />
                   <p className="text-xs text-muted-foreground mt-2">
-                    26 de 30 descartes corretos
+                    {dashboardData?.descartes_corretos ?? 26} de {dashboardData?.total_descartes ?? 30} descartes corretos
                   </p>
                 </CardContent>
               </Card>
@@ -81,9 +105,13 @@ export function MoradorDashboard() {
                   <Calendar className="h-4 w-4 text-green-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-green-700">Amanhã</div>
+                  <div className="text-2xl font-bold text-green-700">
+                    {dashboardData?.proxima_coleta ? 'Amanhã' : 'Sem agendadas'}
+                  </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Resíduos Orgânicos - 15/05
+                    {dashboardData?.proxima_coleta 
+                      ? `${dashboardData.proxima_coleta.tipo.charAt(0).toUpperCase() + dashboardData.proxima_coleta.tipo.slice(1)} - ${new Date(dashboardData.proxima_coleta.data).toLocaleDateString('pt-BR')}`
+                      : 'Nenhuma coleta próxima'}
                   </p>
                 </CardContent>
               </Card>
@@ -94,7 +122,9 @@ export function MoradorDashboard() {
                   <Package className="h-4 w-4 text-green-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-green-700">2</div>
+                  <div className="text-2xl font-bold text-green-700">
+                    {dashboardData?.agendamentos_pendentes ?? 2}
+                  </div>
                   <p className="text-xs text-muted-foreground mt-2">
                     Volumosos pendentes
                   </p>
@@ -142,6 +172,9 @@ export function MoradorDashboard() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Assistente Virtual de IA Integrado */}
+      <ChatbotWidget onRedirectTab={setActiveTab} />
     </div>
   );
 }
