@@ -10,30 +10,22 @@ export interface UserProfile {
 }
 
 export const authService = {
-  async login(email: string, role: 'morador' | 'zelador' | 'sindico'): Promise<{ token: string; user: UserProfile }> {
+  async login(email: string, role: 'morador' | 'zelador' | 'sindico', password: string): Promise<{ token: string; user: UserProfile }> {
     const online = await isApiOnline();
-    
+
     if (online) {
-      try {
-        const response = await api.post('/auth/login', {
-          email,
-          password: 'Password123!', // senha padrão de demo
-          role,
-        });
-        
-        const { access_token, user } = response.data;
-        localStorage.setItem('token', access_token);
-        localStorage.setItem('userRole', user.role);
-        localStorage.setItem('userName', user.nome);
-        localStorage.setItem('userApt', user.apartamento || '');
-        return { token: access_token, user };
-      } catch (err) {
-        console.error('Erro no login real, usando fallback de demo:', err);
-      }
+      // Backend online: usa credenciais reais — erros propagam para o caller
+      const response = await api.post('/auth/login', { email, password, role });
+      const { access_token, user } = response.data;
+      localStorage.setItem('token', access_token);
+      localStorage.setItem('userRole', user.role);
+      localStorage.setItem('userName', user.nome);
+      localStorage.setItem('userApt', user.apartamento || '');
+      return { token: access_token, user };
     }
-    
+
     // Fallback Mock (Backend Offline)
-    console.log('Utilizando login simulado (Demo).');
+    console.log('Backend offline — usando login simulado (Demo).');
     const mockToken = 'mock_jwt_token_for_demo';
     const mockUser: UserProfile = {
       id: 'mock-uuid-1234',
@@ -43,7 +35,6 @@ export const authService = {
       apartamento: '301',
       bloco: 'Torre A',
     };
-    
     localStorage.setItem('token', mockToken);
     localStorage.setItem('userRole', role);
     localStorage.setItem('userName', mockUser.nome);

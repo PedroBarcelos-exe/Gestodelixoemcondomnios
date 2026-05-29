@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
 from app.auth.dependencies import get_current_user
 from app.coletas.models import ColetaCreate, ColetaResponse
 from app.database import get_supabase_admin

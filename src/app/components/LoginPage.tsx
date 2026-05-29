@@ -19,7 +19,7 @@ export function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await authService.login(email, role);
+      await authService.login(email, role, password);
       navigate(`/dashboard/${role}`);
     } catch (error) {
       console.error(error);
