@@ -125,6 +125,76 @@ def get_analytics_chatbot() -> dict:
     }
 
 
+MESES_PT = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+            "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+
+
+def gerar_resumo_ia(mes: int, ano: int) -> dict:
+    from app.chatbot.rag_engine import _get_client
+    from datetime import datetime
+
+    dados = get_relatorio_mensal(mes, ano)
+    nome_mes = MESES_PT[mes]
+
+    prompt = f"""Você é o GreenBin Analytics, sistema de IA especializado em gestão de resíduos condominiais.
+
+Crie um resumo executivo para o síndico referente a {nome_mes} de {ano}, com base nos dados abaixo:
+
+- Resíduos orgânicos coletados: {dados['total_organico_kg']:.1f} kg
+- Resíduos recicláveis coletados: {dados['total_reciclavel_kg']:.1f} kg
+- Rejeitos gerados: {dados['total_rejeito_kg']:.1f} kg
+- Volumosos agendados: {dados['total_volumosos']}
+- Taxa de participação dos moradores: {dados['taxa_participacao']:.1f}%
+- Moradores ativos no período: {dados['moradores_ativos']}
+- CO₂ evitado estimado: {dados['co2_evitado_kg']:.1f} kg
+- Economia gerada: R$ {dados['economia_reais']:.2f}
+
+O resumo deve:
+1. Iniciar com uma avaliação geral do mês (positiva ou com ressalvas)
+2. Destacar os principais pontos positivos com números concretos
+3. Identificar áreas que merecem atenção ou melhorias
+4. Sugerir 2 ou 3 ações práticas para o próximo mês
+5. Ter linguagem formal mas acessível, em português do Brasil
+6. Ter no máximo 4 parágrafos curtos
+7. Não usar markdown, asteriscos ou símbolos especiais — apenas texto limpo"""
+
+    client = _get_client()
+    if client:
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=prompt,
+            )
+            resumo_texto = response.text.strip()
+        except Exception as e:
+            resumo_texto = _resumo_fallback(dados, nome_mes, ano)
+    else:
+        resumo_texto = _resumo_fallback(dados, nome_mes, ano)
+
+    return {
+        "mes": mes,
+        "ano": ano,
+        "nome_mes": nome_mes,
+        "resumo": resumo_texto,
+        "dados": dados,
+        "gerado_em": datetime.now().isoformat(),
+    }
+
+
+def _resumo_fallback(dados: dict, nome_mes: str, ano: int) -> str:
+    taxa = dados['taxa_participacao']
+    nivel = "excelente" if taxa >= 85 else "satisfatória" if taxa >= 70 else "abaixo do esperado"
+    return (
+        f"O mês de {nome_mes} de {ano} apresentou desempenho {nivel} na gestão de resíduos do condomínio, "
+        f"com taxa de participação de {taxa:.1f}% dos moradores.\n\n"
+        f"Foram coletados {dados['total_organico_kg']:.1f} kg de resíduos orgânicos e "
+        f"{dados['total_reciclavel_kg']:.1f} kg de recicláveis, resultando em uma economia estimada de "
+        f"R$ {dados['economia_reais']:.2f} e {dados['co2_evitado_kg']:.1f} kg de CO2 evitado.\n\n"
+        f"Recomenda-se continuar incentivando a separação correta de resíduos e promover campanhas de "
+        f"conscientização para os moradores menos ativos."
+    )
+
+
 def exportar_pdf(mes: int, ano: int) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors

@@ -49,6 +49,18 @@ async def analytics_chatbot(_: dict = Depends(_require_sindico)):
     return service.get_analytics_chatbot()
 
 
+@router.get("/resumo-ia/{ano}/{mes}")
+async def resumo_ia(
+    ano: int,
+    mes: int,
+    _: dict = Depends(_require_sindico)
+):
+    """Gera resumo executivo mensal com IA (Gemini) a partir dos dados de descarte."""
+    if not (1 <= mes <= 12):
+        raise HTTPException(status_code=400, detail="Mês inválido")
+    return service.gerar_resumo_ia(mes, ano)
+
+
 @router.get("/export/pdf/{ano}/{mes}")
 async def exportar_pdf(
     ano: int,

@@ -34,11 +34,13 @@ class TokenResponse(BaseModel):
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest):
     """Autentica usuário via Supabase Auth e retorna JWT."""
-    db = get_supabase_admin()
+    from app.database import get_supabase
+    db_public = get_supabase()
+    db_admin = get_supabase_admin()
 
-    # Autenticar via Supabase Auth
+    # Autenticar via cliente público (anon key) — não polui a sessão do admin
     try:
-        auth_response = db.auth.sign_in_with_password({
+        auth_response = db_public.auth.sign_in_with_password({
             "email": body.email,
             "password": body.password,
         })
@@ -56,8 +58,8 @@ async def login(body: LoginRequest):
 
     supabase_user_id = auth_response.user.id
 
-    # Buscar perfil completo
-    profile = db.table("profiles").select("*").eq("id", supabase_user_id).single().execute()
+    # Buscar perfil completo via admin (contorna RLS)
+    profile = db_admin.table("profiles").select("*").eq("id", supabase_user_id).single().execute()
     if not profile.data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

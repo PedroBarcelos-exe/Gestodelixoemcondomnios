@@ -35,6 +35,15 @@ export interface DetailedAnalytics {
   economia_total_reais: number;
 }
 
+export interface ResumoIA {
+  mes: number;
+  ano: number;
+  nome_mes: string;
+  resumo: string;
+  dados: MonthlyReportData;
+  gerado_em: string;
+}
+
 export interface ChatbotInsight {
   total_interacoes: number;
   perguntas_frequentes: Array<{
@@ -175,6 +184,11 @@ export const sindicoService = {
         '📱 **Chatbot Ativo**: O assistente virtual reduziu em 70% as dúvidas repetitivas enviadas diretamente ao síndico!'
       ]
     };
+  },
+
+  async getResumoIA(mes: number, ano: number): Promise<ResumoIA> {
+    const response = await api.get(`/sindico/resumo-ia/${ano}/${mes}`);
+    return response.data;
   },
 
   async downloadReportPdf(mes: number, ano: number): Promise<void> {

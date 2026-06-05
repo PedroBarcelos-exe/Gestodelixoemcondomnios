@@ -1,8 +1,8 @@
+import { Award, BarChart3, CheckCircle, Leaf, Recycle, Star, TrendingUp, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
-import { Recycle, Leaf, BarChart3, Users, TrendingUp, Award, CheckCircle, Star } from 'lucide-react';
 
 export function LandingPage() {
   const navigate = useNavigate();
@@ -96,17 +96,17 @@ export function LandingPage() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
-              onClick={() => navigate('/login')}
+              onClick={() => navigate('/cadastro')}
               className="bg-white text-green-900 hover:bg-green-50 px-8 py-6 text-lg h-auto"
             >
-              Começar Agora
+              Criar Conta
             </Button>
             <Button
-              onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
+              onClick={() => navigate('/login')}
               variant="outline"
               className="border-2 border-white text-white hover:bg-white/10 px-8 py-6 text-lg h-auto"
             >
-              Conheça a Solução
+              Já tenho conta
             </Button>
           </div>
         </motion.div>

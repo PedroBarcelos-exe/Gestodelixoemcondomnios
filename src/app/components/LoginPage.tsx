@@ -1,12 +1,12 @@
+import { Leaf, Recycle } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authService } from '../../services/authService';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Leaf, Recycle } from 'lucide-react';
-import { authService } from '../../services/authService';
 
 export type UserRole = 'morador' | 'zelador' | 'sindico';
 
@@ -15,14 +15,16 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('morador');
+  const [loginError, setLoginError] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError('');
     try {
       await authService.login(email, role, password);
       navigate(`/dashboard/${role}`);
     } catch (error) {
-      console.error(error);
+      setLoginError('Email ou Senha inválido(a)');
     }
   };
 
@@ -89,6 +91,9 @@ export function LoginPage() {
                 required
               />
             </div>
+            {loginError && (
+              <p className="text-sm text-red-600 text-center">{loginError}</p>
+            )}
             <Button type="submit" className="w-full bg-green-600 hover:bg-green-700">
               Entrar
             </Button>

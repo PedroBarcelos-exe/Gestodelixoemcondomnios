@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react';
-import { BarChart3, Download, FileText, LogOut, Shield, Users, TrendingUp, Bot, Lightbulb, HelpCircle } from 'lucide-react';
+import { BarChart3, Bot, Calendar, HelpCircle, Lightbulb, LogOut, RefreshCw, Shield, Sparkles, TrendingUp, Users } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
+import { toast } from 'sonner';
+import { ChatbotInsight, DetailedAnalytics, ResumoIA, sindicoService } from '../../services/sindicoService';
+import { ConsolidatedReports } from './ConsolidatedReports';
+import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Badge } from './ui/badge';
+import { ChartTooltip } from './ui/chart';
 import { Progress } from './ui/progress';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from './ui/chart';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
-import { ConsolidatedReports } from './ConsolidatedReports';
-import { sindicoService, DetailedAnalytics, ChatbotInsight } from '../../services/sindicoService';
-import { toast } from 'sonner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 export function SindicoDashboard() {
   const navigate = useNavigate();
@@ -19,6 +19,11 @@ export function SindicoDashboard() {
   const [analyticsData, setAnalyticsData] = useState<DetailedAnalytics | null>(null);
   const [chatbotInsights, setChatbotInsights] = useState<ChatbotInsight | null>(null);
   const [loading, setLoading] = useState(true);
+  const [resumoIA, setResumoIA] = useState<ResumoIA | null>(null);
+  const [resumoLoading, setResumoLoading] = useState(false);
+  const hoje = new Date();
+  const [resumoMes, setResumoMes] = useState(hoje.getMonth() + 1);
+  const [resumoAno, setResumoAno] = useState(hoje.getFullYear());
 
   useEffect(() => {
     const loadSindicoData = async () => {
@@ -42,6 +47,21 @@ export function SindicoDashboard() {
     localStorage.clear();
     navigate('/login');
   };
+
+  const handleGerarResumo = async () => {
+    setResumoLoading(true);
+    setResumoIA(null);
+    try {
+      const data = await sindicoService.getResumoIA(resumoMes, resumoAno);
+      setResumoIA(data);
+    } catch (err) {
+      toast.error('Erro ao gerar resumo com IA. Tente novamente.');
+    } finally {
+      setResumoLoading(false);
+    }
+  };
+
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
   const monthlyData = analyticsData?.evolucao_mensal || [
     { month: 'Jan', organico: 450, reciclavel: 320, rejeito: 180 },
@@ -97,9 +117,12 @@ export function SindicoDashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 max-w-md bg-green-100 border border-green-200">
+          <TabsList className="grid w-full grid-cols-3 max-w-xl bg-green-100 border border-green-200">
             <TabsTrigger value="reports" className="data-[state=active]:bg-green-700 data-[state=active]:text-white">Relatórios Mensais</TabsTrigger>
             <TabsTrigger value="analytics" className="data-[state=active]:bg-green-700 data-[state=active]:text-white">Análises Detalhadas</TabsTrigger>
+            <TabsTrigger value="resumo-ia" className="data-[state=active]:bg-green-700 data-[state=active]:text-white flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> Resumo IA
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="reports">
@@ -340,6 +363,142 @@ export function SindicoDashboard() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* Aba Resumo IA */}
+          <TabsContent value="resumo-ia" className="space-y-6">
+            {/* Seletor de mês e botão */}
+            <Card className="border-green-200">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="bg-green-100 p-2 rounded-lg">
+                    <Sparkles className="w-5 h-5 text-green-700" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-bold text-green-900">Resumo Executivo Mensal com IA</CardTitle>
+                    <CardDescription>
+                      O Gemini analisa os dados do condomínio e gera um relatório narrativo com pontos de atenção e sugestões.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-green-600" /> Mês de referência
+                    </label>
+                    <select
+                      value={resumoMes}
+                      onChange={e => setResumoMes(Number(e.target.value))}
+                      className="border border-green-200 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                      {MESES.map((nome, idx) => (
+                        <option key={idx + 1} value={idx + 1}>{nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700">Ano</label>
+                    <select
+                      value={resumoAno}
+                      onChange={e => setResumoAno(Number(e.target.value))}
+                      className="border border-green-200 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                      {[hoje.getFullYear(), hoje.getFullYear() - 1].map(a => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button
+                    onClick={handleGerarResumo}
+                    disabled={resumoLoading}
+                    className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                  >
+                    {resumoLoading
+                      ? <><RefreshCw className="w-4 h-4 animate-spin" /> Gerando...</>
+                      : <><Sparkles className="w-4 h-4" /> Gerar Resumo</>
+                    }
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Resultado do resumo */}
+            {resumoLoading && (
+              <Card className="border-green-200 bg-green-50/30">
+                <CardContent className="py-12 flex flex-col items-center gap-4 text-green-700">
+                  <RefreshCw className="w-10 h-10 animate-spin opacity-60" />
+                  <p className="text-sm font-medium">O Gemini está analisando os dados do condomínio...</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {resumoIA && !resumoLoading && (
+              <>
+                {/* Métricas rápidas do mês */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Orgânicos', value: `${resumoIA.dados.total_organico_kg.toFixed(1)} kg`, color: 'text-green-700' },
+                    { label: 'Recicláveis', value: `${resumoIA.dados.total_reciclavel_kg.toFixed(1)} kg`, color: 'text-blue-600' },
+                    { label: 'Participação', value: `${resumoIA.dados.taxa_participacao.toFixed(1)}%`, color: 'text-emerald-600' },
+                    { label: 'Economia', value: `R$ ${resumoIA.dados.economia_reais.toFixed(2)}`, color: 'text-green-800' },
+                  ].map((item, idx) => (
+                    <Card key={idx} className="border-green-100 bg-white">
+                      <CardContent className="pt-4 pb-3">
+                        <p className="text-xs text-gray-500 mb-1">{item.label}</p>
+                        <p className={`text-xl font-bold ${item.color}`}>{item.value}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Texto do resumo gerado */}
+                <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50/40 to-white">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-emerald-600" />
+                        <CardTitle className="text-base text-emerald-900">
+                          Resumo — {resumoIA.nome_mes} de {resumoIA.ano}
+                        </CardTitle>
+                      </div>
+                      <Badge variant="outline" className="text-emerald-700 border-emerald-300 text-[10px]">
+                        Gemini AI
+                      </Badge>
+                    </div>
+                    <CardDescription className="text-xs text-gray-400">
+                      Gerado em {new Date(resumoIA.gerado_em).toLocaleString('pt-BR')}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line border-l-4 border-emerald-300 pl-4 bg-white rounded-r-lg py-4 pr-4 shadow-sm">
+                      {resumoIA.resumo}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGerarResumo}
+                      className="mt-4 text-green-700 border-green-200 hover:bg-green-50 flex items-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Regenerar
+                    </Button>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {!resumoIA && !resumoLoading && (
+              <Card className="border-dashed border-2 border-green-200 bg-transparent">
+                <CardContent className="py-16 flex flex-col items-center gap-3 text-center">
+                  <Sparkles className="w-10 h-10 text-green-300" />
+                  <p className="text-base font-medium text-gray-600">Selecione o mês e clique em "Gerar Resumo"</p>
+                  <p className="text-sm text-gray-400 max-w-md">
+                    O Gemini vai analisar os dados de descarte, participação e economia do condomínio e criar um relatório executivo com sugestões de melhoria.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </main>
