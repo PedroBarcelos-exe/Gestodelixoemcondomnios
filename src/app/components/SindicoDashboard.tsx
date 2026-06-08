@@ -1,9 +1,9 @@
-import { BarChart3, Bot, Calendar, HelpCircle, Lightbulb, LogOut, RefreshCw, Shield, Sparkles, TrendingUp, Users } from 'lucide-react';
+import { BarChart3, Bot, Calendar, CheckSquare, ClipboardList, HelpCircle, Lightbulb, LogOut, MessageSquare, RefreshCw, Shield, Sparkles, TrendingUp, Truck, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
-import { ChatbotInsight, DetailedAnalytics, ResumoIA, sindicoService } from '../../services/sindicoService';
+import { ChatbotInsight, DailyReport, DetailedAnalytics, ResumoIA, sindicoService } from '../../services/sindicoService';
 import { ConsolidatedReports } from './ConsolidatedReports';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -21,6 +21,8 @@ export function SindicoDashboard() {
   const [loading, setLoading] = useState(true);
   const [resumoIA, setResumoIA] = useState<ResumoIA | null>(null);
   const [resumoLoading, setResumoLoading] = useState(false);
+  const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
+  const [dailyReportLoading, setDailyReportLoading] = useState(false);
   const hoje = new Date();
   const [resumoMes, setResumoMes] = useState(hoje.getMonth() + 1);
   const [resumoAno, setResumoAno] = useState(hoje.getFullYear());
@@ -46,6 +48,19 @@ export function SindicoDashboard() {
   const handleLogout = () => {
     localStorage.clear();
     navigate('/login');
+  };
+
+  const handleGerarRelatorioDiario = async () => {
+    setDailyReportLoading(true);
+    setDailyReport(null);
+    try {
+      const data = await sindicoService.getDailyReport();
+      setDailyReport(data);
+    } catch {
+      toast.error('Erro ao gerar relatório diário. Tente novamente.');
+    } finally {
+      setDailyReportLoading(false);
+    }
   };
 
   const handleGerarResumo = async () => {
@@ -117,11 +132,14 @@ export function SindicoDashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 max-w-xl bg-green-100 border border-green-200">
+          <TabsList className="grid w-full grid-cols-4 max-w-2xl bg-green-100 border border-green-200">
             <TabsTrigger value="reports" className="data-[state=active]:bg-green-700 data-[state=active]:text-white">Relatórios Mensais</TabsTrigger>
             <TabsTrigger value="analytics" className="data-[state=active]:bg-green-700 data-[state=active]:text-white">Análises Detalhadas</TabsTrigger>
             <TabsTrigger value="resumo-ia" className="data-[state=active]:bg-green-700 data-[state=active]:text-white flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" /> Resumo IA
+            </TabsTrigger>
+            <TabsTrigger value="diario" className="data-[state=active]:bg-green-700 data-[state=active]:text-white flex items-center gap-1.5">
+              <ClipboardList className="w-3.5 h-3.5" /> Relatório Diário
             </TabsTrigger>
           </TabsList>
 
@@ -495,6 +513,129 @@ export function SindicoDashboard() {
                   <p className="text-base font-medium text-gray-600">Selecione o mês e clique em "Gerar Resumo"</p>
                   <p className="text-sm text-gray-400 max-w-md">
                     O Gemini vai analisar os dados de descarte, participação e economia do condomínio e criar um relatório executivo com sugestões de melhoria.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+          {/* Tab Relatório Diário */}
+          <TabsContent value="diario" className="space-y-6">
+            {/* Cabeçalho + botão */}
+            <Card className="border-green-200">
+              <CardHeader>
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-green-100 p-2 rounded-lg">
+                      <ClipboardList className="w-5 h-5 text-green-700" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg font-bold text-green-900">Relatório Diário com IA</CardTitle>
+                      <CardDescription>
+                        O Gemini analisa as interações do dia e gera um resumo executivo por tópico.
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleGerarRelatorioDiario}
+                    disabled={dailyReportLoading}
+                    className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                  >
+                    {dailyReportLoading
+                      ? <><RefreshCw className="w-4 h-4 animate-spin" /> Gerando...</>
+                      : <><Sparkles className="w-4 h-4" /> Gerar Relatório de Hoje</>
+                    }
+                  </Button>
+                </div>
+              </CardHeader>
+            </Card>
+
+            {/* Loading */}
+            {dailyReportLoading && (
+              <Card className="border-green-200 bg-green-50/30">
+                <CardContent className="py-12 flex flex-col items-center gap-4 text-green-700">
+                  <RefreshCw className="w-10 h-10 animate-spin opacity-60" />
+                  <p className="text-sm font-medium">O Gemini está analisando as atividades de hoje...</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Resultado */}
+            {dailyReport && !dailyReportLoading && (
+              <>
+                {/* Totais do dia */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  {[
+                    { label: 'Agend. Novos', value: dailyReport.totais.agendamentos_novos, icon: <Truck className="w-4 h-4" />, color: 'text-green-700' },
+                    { label: 'Agend. Atualizados', value: dailyReport.totais.agendamentos_atualizados, icon: <Truck className="w-4 h-4" />, color: 'text-blue-600' },
+                    { label: 'Tarefas Total', value: dailyReport.totais.tarefas_total, icon: <ClipboardList className="w-4 h-4" />, color: 'text-gray-700' },
+                    { label: 'Tarefas Concluídas', value: dailyReport.totais.tarefas_concluidas, icon: <CheckSquare className="w-4 h-4" />, color: 'text-emerald-700' },
+                    { label: 'Interações Chatbot', value: dailyReport.totais.interacoes_chatbot, icon: <MessageSquare className="w-4 h-4" />, color: 'text-purple-600' },
+                  ].map((item, idx) => (
+                    <Card key={idx} className="border-green-100 bg-white">
+                      <CardContent className="pt-4 pb-3">
+                        <div className={`flex items-center gap-1.5 text-xs text-gray-500 mb-1 ${item.color}`}>{item.icon}<span>{item.label}</span></div>
+                        <p className={`text-2xl font-bold ${item.color}`}>{item.value}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Cabeçalho do relatório */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-bold text-gray-800">
+                      {dailyReport.dia_semana}, {dailyReport.nome_dia}
+                    </h3>
+                    <p className="text-xs text-gray-400">Gerado em {new Date(dailyReport.gerado_em).toLocaleString('pt-BR')}</p>
+                  </div>
+                  <Badge variant="outline" className="text-emerald-700 border-emerald-300 text-[10px]">Gemini AI</Badge>
+                </div>
+
+                {/* Seções geradas pela IA */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {dailyReport.secoes.map((secao, idx) => {
+                    const configs = [
+                      { icon: <Truck className="w-4 h-4 text-green-600" />, border: 'border-green-200', bg: 'bg-green-50/40', header: 'bg-green-100/50', badge: 'text-green-800 border-green-300' },
+                      { icon: <CheckSquare className="w-4 h-4 text-blue-600" />, border: 'border-blue-200', bg: 'bg-blue-50/40', header: 'bg-blue-100/50', badge: 'text-blue-800 border-blue-300' },
+                      { icon: <MessageSquare className="w-4 h-4 text-purple-600" />, border: 'border-purple-200', bg: 'bg-purple-50/40', header: 'bg-purple-100/50', badge: 'text-purple-800 border-purple-300' },
+                    ];
+                    const cfg = configs[idx] || configs[0];
+                    return (
+                      <Card key={idx} className={`${cfg.border} ${cfg.bg} shadow-sm`}>
+                        <CardHeader className={`${cfg.header} rounded-t-lg pb-3 pt-4 px-4`}>
+                          <CardTitle className="text-sm font-bold flex items-center gap-2 text-gray-800">
+                            {cfg.icon}
+                            {secao.titulo}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-4 px-4 pb-4">
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                            {secao.conteudo || 'Nenhuma atividade registrada nesta área hoje.'}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGerarRelatorioDiario}
+                  className="text-green-700 border-green-200 hover:bg-green-50 flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Atualizar Relatório
+                </Button>
+              </>
+            )}
+
+            {!dailyReport && !dailyReportLoading && (
+              <Card className="border-dashed border-2 border-green-200 bg-transparent">
+                <CardContent className="py-16 flex flex-col items-center gap-3 text-center">
+                  <ClipboardList className="w-10 h-10 text-green-300" />
+                  <p className="text-base font-medium text-gray-600">Clique em "Gerar Relatório de Hoje"</p>
+                  <p className="text-sm text-gray-400 max-w-md">
+                    O Gemini vai analisar os agendamentos, tarefas do zelador e dúvidas no chatbot de hoje e gerar um resumo executivo separado por tópicos.
                   </p>
                 </CardContent>
               </Card>

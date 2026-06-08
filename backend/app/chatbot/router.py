@@ -63,12 +63,19 @@ async def enviar_mensagem(
     reminder_details = None
     pergunta_l = pergunta.lower()
     
-    if any(w in pergunta_l for w in ["volumoso", "sofá", "colchão", "cama", "geladeira", "mesa"]):
+    if any(w in pergunta_l for w in ["agendar", "quero agendar", "solicitar coleta", "agendar coleta", "marcar coleta"]):
         suggest_reminder = True
         reminder_details = {
             "tipo": "volumoso",
-            "mensagem": "Identifiquei que você quer descartar um item volumoso. Gostaria de abrir a aba de Agendamentos?",
-            "action": "redirect_schedule"
+            "mensagem": "Vou abrir o formulário de agendamento para você!",
+            "action": "create_agendamento"
+        }
+    elif any(w in pergunta_l for w in ["volumoso", "sofá", "colchão", "cama", "geladeira", "mesa", "armário", "fogão", "lavadora"]):
+        suggest_reminder = True
+        reminder_details = {
+            "tipo": "volumoso",
+            "mensagem": "Identifiquei que você quer descartar um item volumoso. Posso abrir o formulário de agendamento agora!",
+            "action": "create_agendamento"
         }
     elif "vidro" in pergunta_l:
         suggest_reminder = True

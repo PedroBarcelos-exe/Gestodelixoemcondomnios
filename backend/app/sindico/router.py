@@ -49,6 +49,12 @@ async def analytics_chatbot(_: dict = Depends(_require_sindico)):
     return service.get_analytics_chatbot()
 
 
+@router.get("/relatorio-diario")
+async def relatorio_diario(_: dict = Depends(_require_sindico)):
+    """Gera relatório diário com IA sobre agendamentos, tarefas e dúvidas do dia."""
+    return service.gerar_relatorio_diario()
+
+
 @router.get("/resumo-ia/{ano}/{mes}")
 async def resumo_ia(
     ano: int,

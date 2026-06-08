@@ -54,6 +54,21 @@ export interface ChatbotInsight {
   sugestoes_melhoria: string[];
 }
 
+export interface DailyReport {
+  data: string;
+  nome_dia: string;
+  dia_semana: string;
+  secoes: Array<{ titulo: string; conteudo: string }>;
+  totais: {
+    agendamentos_novos: number;
+    agendamentos_atualizados: number;
+    tarefas_total: number;
+    tarefas_concluidas: number;
+    interacoes_chatbot: number;
+  };
+  gerado_em: string;
+}
+
 export const sindicoService = {
   async getReport(mes: number, ano: number): Promise<MonthlyReportData> {
     const online = await isApiOnline();
@@ -188,6 +203,11 @@ export const sindicoService = {
 
   async getResumoIA(mes: number, ano: number): Promise<ResumoIA> {
     const response = await api.get(`/sindico/resumo-ia/${ano}/${mes}`);
+    return response.data;
+  },
+
+  async getDailyReport(): Promise<DailyReport> {
+    const response = await api.get('/sindico/relatorio-diario');
     return response.data;
   },
 

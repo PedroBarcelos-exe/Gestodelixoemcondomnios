@@ -1,4 +1,5 @@
 import { api } from './api';
+import { moradorService, PickupSchedule } from './moradorService';
 
 export interface ChatMessage {
   id: string;
@@ -13,7 +14,7 @@ export interface ChatbotResponse {
   reminder_details?: {
     tipo: 'volumoso' | 'vidro' | 'oleo';
     mensagem: string;
-    action: 'redirect_schedule' | 'add_calendar_reminder' | 'show_ecoponto_location';
+    action: 'redirect_schedule' | 'add_calendar_reminder' | 'show_ecoponto_location' | 'create_agendamento';
   };
 }
 
@@ -35,5 +36,9 @@ export const chatbotService = {
         { id: '1', role: 'assistant', conteudo: 'Olá! Sou o GreenBin Helper. Estou treinado com todas as regras do condomínio e posso tirar suas dúvidas sobre descarte de resíduos. Como posso te ajudar?' }
       ];
     }
+  },
+
+  async schedulePickup(tipo_item: string, descricao: string, data_preferencial: string): Promise<PickupSchedule> {
+    return moradorService.criarAgendamento(tipo_item, descricao, data_preferencial);
   }
 };
