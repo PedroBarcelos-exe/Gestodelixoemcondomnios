@@ -270,7 +270,7 @@ def get_analytics_chatbot() -> dict:
     sugestoes = _gerar_sugestoes_chatbot_ia(perguntas, total, _get_client())
 
     return {
-        "total_mensagens": total,
+        "total_interacoes": total,
         "perguntas_frequentes": perguntas,
         "sugestoes_melhoria": sugestoes,
     }

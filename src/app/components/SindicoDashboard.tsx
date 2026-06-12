@@ -290,7 +290,7 @@ export function SindicoDashboard() {
                         <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block mb-2">Interações Realizadas</span>
                         <div className="flex items-baseline gap-2">
                           <span className="text-4xl font-extrabold text-emerald-700">
-                            {chatbotInsights?.total_interacoes ?? chatbotInsights?.total_interacoes ?? 145}
+                            {chatbotInsights?.total_interacoes ?? 145}
                           </span>
                           <span className="text-sm font-medium text-gray-500">perguntas respondidas</span>
                         </div>
