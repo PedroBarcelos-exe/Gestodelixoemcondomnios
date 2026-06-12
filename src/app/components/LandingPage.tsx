@@ -97,14 +97,14 @@ export function LandingPage() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
               onClick={() => navigate('/cadastro')}
-              className="bg-white text-green-900 hover:bg-green-50 px-8 py-6 text-lg h-auto"
+              className="bg-white text-green-900 hover:bg-emerald-100 hover:scale-105 hover:shadow-lg transition-all duration-200 px-8 py-6 text-lg h-auto"
             >
               Criar Conta
             </Button>
             <Button
               onClick={() => navigate('/login')}
               variant="outline"
-              className="border-2 border-white text-white hover:bg-white/10 px-8 py-6 text-lg h-auto"
+              className="border-2 border-white bg-transparent text-white hover:bg-white/10 px-8 py-6 text-lg h-auto"
             >
               Já tenho conta
             </Button>

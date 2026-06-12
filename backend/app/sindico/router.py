@@ -67,21 +67,37 @@ async def resumo_ia(
     return service.gerar_resumo_ia(mes, ano)
 
 
-@router.get("/export/pdf/{ano}/{mes}")
-async def exportar_pdf(
+@router.get("/top-moradores/{ano}/{mes}")
+async def top_moradores(
     ano: int,
     mes: int,
     _: dict = Depends(_require_sindico)
 ):
-    """Gera e retorna o relatório mensal em PDF."""
+    """Retorna top 5 moradores com mais descartes no mês."""
     if not (1 <= mes <= 12):
         raise HTTPException(status_code=400, detail="Mês inválido")
+    return service.get_top_moradores(mes, ano)
+
+
+@router.get("/export/pdf/{ano}/{mes}")
+async def exportar_pdf(
+    ano: int,
+    mes: int,
+    tipo: str = "completo",
+    _: dict = Depends(_require_sindico)
+):
+    """Gera e retorna o relatório mensal em PDF. tipo: completo | financeiro | ambiental | participacao"""
+    if not (1 <= mes <= 12):
+        raise HTTPException(status_code=400, detail="Mês inválido")
+    if tipo not in ("completo", "financeiro", "ambiental", "participacao"):
+        raise HTTPException(status_code=400, detail="Tipo inválido")
     try:
-        pdf_bytes = service.exportar_pdf(mes, ano)
+        pdf_bytes = service.exportar_pdf(mes, ano, tipo)
+        filename = f"relatorio_{tipo}_{ano}_{mes:02d}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=relatorio_{ano}_{mes:02d}.pdf"}
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar PDF: {str(e)}")

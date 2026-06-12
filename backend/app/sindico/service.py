@@ -29,7 +29,7 @@ def gerar_relatorio_diario() -> dict:
         .execute()
 
     tarefas = db.table("tarefas_zelador") \
-        .select("titulo, categoria, concluida, prioridade") \
+        .select("descricao, categoria, concluida, prioridade") \
         .eq("data", hoje_str) \
         .execute()
 
@@ -84,8 +84,8 @@ def _gerar_secoes_relatorio_diario(
         def fmt_tarefas():
             if not tarefas:
                 return "Nenhuma tarefa registrada para hoje."
-            concluidas = [t.get("titulo", "?") for t in tarefas_concluidas]
-            pendentes = [t.get("titulo", "?") for t in tarefas if not t.get("concluida")]
+            concluidas = [t.get("descricao", "?") for t in tarefas_concluidas]
+            pendentes = [t.get("descricao", "?") for t in tarefas if not t.get("concluida")]
             return f"Concluídas ({len(tarefas_concluidas)}): {', '.join(concluidas[:4]) or 'nenhuma'}. Pendentes ({len(pendentes)}): {', '.join(pendentes[:4]) or 'nenhuma'}."
 
         def fmt_perguntas():
@@ -204,6 +204,8 @@ def _gerar_relatorio(mes: int, ano: int) -> dict:
     co2 = round(total_kg_reciclado * 0.5, 2)
     economia = round(reciclavel * 0.8 + organico * 0.3, 2)
 
+    descartes_corretos = sum(1 for r in dados if r.get("correto"))
+
     relatorio = {
         "mes": mes,
         "ano": ano,
@@ -215,6 +217,7 @@ def _gerar_relatorio(mes: int, ano: int) -> dict:
         "moradores_ativos": moradores_ativos,
         "co2_evitado_kg": co2,
         "economia_reais": economia,
+        "descartes_corretos": descartes_corretos,
     }
 
     # Salvar no banco para cache
@@ -307,6 +310,48 @@ MESES_PT = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
             "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
 
+def get_top_moradores(mes: int, ano: int) -> list:
+    from collections import Counter
+    db = get_supabase_admin()
+    primeiro_dia = f"{ano}-{mes:02d}-01"
+    ultimo_dia = f"{ano+1}-01-01" if mes == 12 else f"{ano}-{mes+1:02d}-01"
+
+    registros = db.table("registros_descarte") \
+        .select("morador_id, correto") \
+        .gte("data", primeiro_dia) \
+        .lt("data", ultimo_dia) \
+        .execute()
+
+    dados = registros.data or []
+    if not dados:
+        return []
+
+    total_por_morador: Counter = Counter(r["morador_id"] for r in dados)
+    corretos_por_morador: Counter = Counter(r["morador_id"] for r in dados if r.get("correto"))
+    top_ids = [m for m, _ in total_por_morador.most_common(5)]
+
+    profiles_res = db.table("profiles") \
+        .select("id, nome, apartamento") \
+        .in_("id", top_ids) \
+        .execute()
+    profiles_map = {p["id"]: p for p in (profiles_res.data or [])}
+
+    result = []
+    for morador_id in top_ids:
+        profile = profiles_map.get(morador_id, {})
+        total = total_por_morador[morador_id]
+        corretos = corretos_por_morador.get(morador_id, 0)
+        score = round(corretos / total * 100) if total > 0 else 0
+        result.append({
+            "nome": profile.get("nome", "Morador"),
+            "apartamento": profile.get("apartamento", "?"),
+            "descartes": total,
+            "score": score,
+        })
+
+    return result
+
+
 def gerar_resumo_ia(mes: int, ano: int) -> dict:
     from app.chatbot.rag_engine import _get_client
     from datetime import datetime
@@ -373,7 +418,7 @@ def _resumo_fallback(dados: dict, nome_mes: str, ano: int) -> str:
     )
 
 
-def exportar_pdf(mes: int, ano: int) -> bytes:
+def exportar_pdf(mes: int, ano: int, tipo: str = "completo") -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
@@ -382,78 +427,237 @@ def exportar_pdf(mes: int, ano: int) -> bytes:
     from datetime import datetime
 
     dados = get_relatorio_mensal(mes, ano)
-    resumo_ia = gerar_resumo_ia(mes, ano)
+    nome_mes = MESES_PT[mes]
+    agora = datetime.now().strftime('%d/%m/%Y às %H:%M')
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm,
                              topMargin=2*cm, bottomMargin=2*cm)
 
     styles = getSampleStyleSheet()
+
+    CORES = {
+        "financeiro":   ("#166534", "#dcfce7", "#bbf7d0", "#f0fdf4"),
+        "ambiental":    ("#065f46", "#d1fae5", "#6ee7b7", "#ecfdf5"),
+        "participacao": ("#1e40af", "#dbeafe", "#93c5fd", "#eff6ff"),
+        "completo":     ("#166534", "#dcfce7", "#bbf7d0", "#f0fdf4"),
+    }
+    cor_titulo, cor_badge_bg, cor_grid, cor_row = CORES.get(tipo, CORES["completo"])
+
     titulo_style = ParagraphStyle("titulo", parent=styles["Heading1"],
-                                  textColor=colors.HexColor("#166534"), fontSize=20)
+                                  textColor=colors.HexColor(cor_titulo), fontSize=20)
     secao_style = ParagraphStyle("secao", parent=styles["Heading2"],
-                                 textColor=colors.HexColor("#166534"), fontSize=13, spaceAfter=6)
+                                 textColor=colors.HexColor(cor_titulo), fontSize=13, spaceAfter=6)
     sub_style = ParagraphStyle("sub", parent=styles["Normal"], textColor=colors.gray, fontSize=10)
     body_style = ParagraphStyle("body", parent=styles["Normal"], fontSize=11,
                                 leading=16, textColor=colors.HexColor("#1c1c1c"))
     ia_badge_style = ParagraphStyle("ia_badge", parent=styles["Normal"],
-                                    textColor=colors.HexColor("#166534"), fontSize=9,
-                                    backColor=colors.HexColor("#dcfce7"), borderPadding=4)
+                                    textColor=colors.HexColor(cor_titulo), fontSize=9,
+                                    backColor=colors.HexColor(cor_badge_bg), borderPadding=4)
 
-    story = [
-        Paragraph("GreenBin – Relatório Mensal", titulo_style),
-        Spacer(1, 0.2*cm),
-        Paragraph(f"{MESES_PT[mes]} de {ano}", sub_style),
-        Paragraph(f"Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}", sub_style),
-        Spacer(1, 0.8*cm),
-        Paragraph("Dados do Período", secao_style),
-    ]
+    def tabela_estilizada(dados_tabela, col_widths=None):
+        n_cols = len(dados_tabela[0])
+        if col_widths is None:
+            largura_total = 16*cm
+            col_widths = [largura_total / n_cols] * n_cols
+        t = Table(dados_tabela, colWidths=col_widths)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(cor_titulo)),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 12),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor(cor_row), colors.white]),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor(cor_grid)),
+            ("FONTSIZE", (0, 1), (-1, -1), 11),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        return t
 
-    tabela_dados = [
-        ["Métrica", "Valor"],
-        ["Orgânicos coletados", f"{dados['total_organico_kg']:.1f} kg"],
-        ["Recicláveis coletados", f"{dados['total_reciclavel_kg']:.1f} kg"],
-        ["Rejeitos", f"{dados['total_rejeito_kg']:.1f} kg"],
-        ["Coletas volumosas", str(dados["total_volumosos"])],
-        ["Taxa de participação", f"{dados['taxa_participacao']:.1f}%"],
-        ["Moradores ativos", str(dados["moradores_ativos"])],
-        ["CO₂ evitado", f"{dados['co2_evitado_kg']:.1f} kg"],
-        ["Economia estimada", f"R$ {dados['economia_reais']:.2f}"],
-    ]
+    def rodape(story):
+        story.append(Spacer(1, 0.5*cm))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#d1d5db")))
+        story.append(Spacer(1, 0.2*cm))
+        story.append(Paragraph("Relatório gerado automaticamente pelo sistema GreenBin.", sub_style))
 
-    tabela = Table(tabela_dados, colWidths=[10*cm, 6*cm])
-    tabela.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#166534")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 12),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#f0fdf4"), colors.white]),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#bbf7d0")),
-        ("FONTSIZE", (0, 1), (-1, -1), 11),
-        ("LEFTPADDING", (0, 0), (-1, -1), 10),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
+    story = []
 
-    story.append(tabela)
-    story.append(Spacer(1, 1*cm))
-    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#bbf7d0")))
-    story.append(Spacer(1, 0.5*cm))
-    story.append(Paragraph("Resumo Executivo — Gerado por Inteligência Artificial", secao_style))
-    story.append(Paragraph("Análise GreenBin Analytics (Gemini AI)", ia_badge_style))
-    story.append(Spacer(1, 0.4*cm))
+    # ── Financeiro ──────────────────────────────────────────────────────────────
+    if tipo == "financeiro":
+        INVESTIMENTO = 950
+        economia = dados["economia_reais"]
+        custo_anterior = economia + INVESTIMENTO
+        pct_reducao = round(economia / custo_anterior * 100, 1) if custo_anterior > 0 else 0
+        eco_reciclavel = round(dados["total_reciclavel_kg"] * 0.8, 2)
+        eco_organico = round(dados["total_organico_kg"] * 0.3, 2)
 
-    for paragrafo in resumo_ia["resumo"].split("\n\n"):
-        texto = paragrafo.strip()
-        if texto:
-            story.append(Paragraph(texto, body_style))
-            story.append(Spacer(1, 0.3*cm))
+        story += [
+            Paragraph("GreenBin – Análise Financeira", titulo_style),
+            Spacer(1, 0.2*cm),
+            Paragraph(f"{nome_mes} de {ano}", sub_style),
+            Paragraph(f"Gerado em {agora}", sub_style),
+            Spacer(1, 0.8*cm),
+            Paragraph("Resumo Financeiro do Período", secao_style),
+            tabela_estilizada([
+                ["Métrica", "Valor"],
+                ["Custo estimado sem GreenBin", f"R$ {custo_anterior:,.2f}".replace(",", ".")],
+                ["Investimento GreenBin (mensalidade)", "R$ 950,00"],
+                ["Economia líquida gerada", f"R$ {economia:,.2f}".replace(",", ".")],
+                ["Redução percentual vs. referência", f"{pct_reducao}%"],
+            ], [10*cm, 6*cm]),
+            Spacer(1, 0.8*cm),
+            Paragraph("Detalhamento das Economias", secao_style),
+            tabela_estilizada([
+                ["Origem da Economia", "Kg Gerenciado", "Valor Estimado"],
+                ["Aumento de reciclagem", f"{dados['total_reciclavel_kg']:.1f} kg", f"R$ {eco_reciclavel:,.2f}".replace(",", ".")],
+                ["Redução de rejeitos (orgânicos)", f"{dados['total_organico_kg']:.1f} kg", f"R$ {eco_organico:,.2f}".replace(",", ".")],
+            ], [7*cm, 4.5*cm, 4.5*cm]),
+            Spacer(1, 0.8*cm),
+            Paragraph("Outros Indicadores", secao_style),
+            tabela_estilizada([
+                ["Indicador", "Valor"],
+                ["Coletas volumosas no mês", str(dados["total_volumosos"])],
+                ["Moradores ativos", str(dados["moradores_ativos"])],
+                ["Taxa de participação", f"{dados['taxa_participacao']:.1f}%"],
+            ], [10*cm, 6*cm]),
+        ]
+        rodape(story)
 
-    story.append(Spacer(1, 0.5*cm))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#d1d5db")))
-    story.append(Spacer(1, 0.2*cm))
-    story.append(Paragraph("Relatório gerado automaticamente pelo sistema GreenBin.", sub_style))
+    # ── Ambiental ───────────────────────────────────────────────────────────────
+    elif tipo == "ambiental":
+        total_kg = dados["total_organico_kg"] + dados["total_reciclavel_kg"] + dados["total_rejeito_kg"]
+        pct_rec = round(dados["total_reciclavel_kg"] / total_kg * 100, 1) if total_kg > 0 else 0
+        pct_org = round(dados["total_organico_kg"] / total_kg * 100, 1) if total_kg > 0 else 0
+        pct_rej = round(100 - pct_rec - pct_org, 1)
+        co2_tons = dados["co2_evitado_kg"] / 1000
+
+        story += [
+            Paragraph("GreenBin – Impacto Ambiental", titulo_style),
+            Spacer(1, 0.2*cm),
+            Paragraph(f"{nome_mes} de {ano}", sub_style),
+            Paragraph(f"Gerado em {agora}", sub_style),
+            Spacer(1, 0.8*cm),
+            Paragraph("Indicadores Ambientais", secao_style),
+            tabela_estilizada([
+                ["Métrica", "Valor"],
+                ["CO₂ evitado no período", f"{co2_tons:.3f} toneladas ({dados['co2_evitado_kg']:.1f} kg)"],
+                ["Taxa de reciclagem", f"{pct_rec}%"],
+                ["Rejeito do total coletado", f"{pct_rej}%"],
+                ["Participação ativa dos moradores", f"{dados['taxa_participacao']:.1f}%"],
+            ], [10*cm, 6*cm]),
+            Spacer(1, 0.8*cm),
+            Paragraph("Distribuição dos Resíduos", secao_style),
+            tabela_estilizada([
+                ["Tipo de Resíduo", "Quantidade (kg)", "% do Total"],
+                ["Orgânico", f"{dados['total_organico_kg']:.1f} kg", f"{pct_org}%"],
+                ["Reciclável", f"{dados['total_reciclavel_kg']:.1f} kg", f"{pct_rec}%"],
+                ["Rejeito", f"{dados['total_rejeito_kg']:.1f} kg", f"{pct_rej}%"],
+                ["TOTAL", f"{total_kg:.1f} kg", "100%"],
+            ], [7*cm, 5*cm, 4*cm]),
+            Spacer(1, 0.8*cm),
+            Paragraph("Análise de Sustentabilidade — IA GreenBin Analytics", secao_style),
+            Paragraph("Análise gerada por Gemini AI", ia_badge_style),
+            Spacer(1, 0.4*cm),
+        ]
+
+        resumo_ia = gerar_resumo_ia(mes, ano)
+        for paragrafo in resumo_ia["resumo"].split("\n\n"):
+            texto = paragrafo.strip()
+            if texto:
+                story.append(Paragraph(texto, body_style))
+                story.append(Spacer(1, 0.3*cm))
+
+        rodape(story)
+
+    # ── Participação ────────────────────────────────────────────────────────────
+    elif tipo == "participacao":
+        top = get_top_moradores(mes, ano)
+
+        story += [
+            Paragraph("GreenBin – Participação dos Moradores", titulo_style),
+            Spacer(1, 0.2*cm),
+            Paragraph(f"{nome_mes} de {ano}", sub_style),
+            Paragraph(f"Gerado em {agora}", sub_style),
+            Spacer(1, 0.8*cm),
+            Paragraph("Indicadores de Engajamento", secao_style),
+            tabela_estilizada([
+                ["Métrica", "Valor"],
+                ["Taxa de participação", f"{dados['taxa_participacao']:.1f}%"],
+                ["Moradores ativos no período", str(dados["moradores_ativos"])],
+                ["Total de descartes corretos", str(dados.get("descartes_corretos", "–"))],
+            ]),
+            Spacer(1, 0.8*cm),
+            Paragraph("Top 5 Moradores do Mês", secao_style),
+        ]
+
+        if top:
+            linhas_top = [["#", "Morador", "Apartamento", "Descartes", "Score"]]
+            for i, m in enumerate(top, 1):
+                linhas_top.append([
+                    str(i),
+                    m["nome"],
+                    f"Apto {m['apartamento']}",
+                    str(m["descartes"]),
+                    f"{m['score']}%",
+                ])
+            t_top = Table(linhas_top, colWidths=[1*cm, 6*cm, 3*cm, 2.5*cm, 2.5*cm])
+            t_top.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(cor_titulo)),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor(cor_row), colors.white]),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor(cor_grid)),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ]))
+            story.append(t_top)
+        else:
+            story.append(Paragraph("Sem registros de descarte no período selecionado.", body_style))
+
+        rodape(story)
+
+    # ── Completo (legado) ────────────────────────────────────────────────────────
+    else:
+        resumo_ia = gerar_resumo_ia(mes, ano)
+
+        story += [
+            Paragraph("GreenBin – Relatório Mensal Completo", titulo_style),
+            Spacer(1, 0.2*cm),
+            Paragraph(f"{nome_mes} de {ano}", sub_style),
+            Paragraph(f"Gerado em {agora}", sub_style),
+            Spacer(1, 0.8*cm),
+            Paragraph("Dados do Período", secao_style),
+            tabela_estilizada([
+                ["Métrica", "Valor"],
+                ["Orgânicos coletados", f"{dados['total_organico_kg']:.1f} kg"],
+                ["Recicláveis coletados", f"{dados['total_reciclavel_kg']:.1f} kg"],
+                ["Rejeitos", f"{dados['total_rejeito_kg']:.1f} kg"],
+                ["Coletas volumosas", str(dados["total_volumosos"])],
+                ["Taxa de participação", f"{dados['taxa_participacao']:.1f}%"],
+                ["Moradores ativos", str(dados["moradores_ativos"])],
+                ["CO₂ evitado", f"{dados['co2_evitado_kg']:.1f} kg"],
+                ["Economia estimada", f"R$ {dados['economia_reais']:.2f}"],
+            ], [10*cm, 6*cm]),
+            Spacer(1, 1*cm),
+            HRFlowable(width="100%", thickness=1, color=colors.HexColor("#bbf7d0")),
+            Spacer(1, 0.5*cm),
+            Paragraph("Resumo Executivo — Gerado por Inteligência Artificial", secao_style),
+            Paragraph("Análise GreenBin Analytics (Gemini AI)", ia_badge_style),
+            Spacer(1, 0.4*cm),
+        ]
+
+        for paragrafo in resumo_ia["resumo"].split("\n\n"):
+            texto = paragrafo.strip()
+            if texto:
+                story.append(Paragraph(texto, body_style))
+                story.append(Spacer(1, 0.3*cm))
+
+        rodape(story)
 
     doc.build(story)
     buffer.seek(0)

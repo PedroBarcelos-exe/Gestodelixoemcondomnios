@@ -11,6 +11,14 @@ export interface MonthlyReportData {
   moradores_ativos: number;
   co2_evitado_kg: number;
   economia_reais: number;
+  descartes_corretos?: number;
+}
+
+export interface TopMorador {
+  nome: string;
+  apartamento: string;
+  descartes: number;
+  score: number;
 }
 
 export interface DetailedAnalytics {
@@ -211,18 +219,32 @@ export const sindicoService = {
     return response.data;
   },
 
-  async downloadReportPdf(mes: number, ano: number): Promise<void> {
+  async getTopMoradores(mes: number, ano: number): Promise<TopMorador[]> {
+    const online = await isApiOnline();
+    if (online) {
+      try {
+        const response = await api.get(`/sindico/top-moradores/${ano}/${mes}`);
+        return response.data;
+      } catch (err) {
+        console.error('Erro ao buscar top moradores:', err);
+      }
+    }
+    return [];
+  },
+
+  async downloadReportPdf(mes: number, ano: number, tipo: 'financeiro' | 'ambiental' | 'participacao' | 'completo' = 'completo'): Promise<void> {
     const online = await isApiOnline();
     if (online) {
       try {
         const response = await api.get(`/sindico/export/pdf/${ano}/${mes}`, {
+          params: { tipo },
           responseType: 'blob'
         });
-        
+
         const url = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `relatorio_${ano}_${mes.toString().padStart(2, '0')}.pdf`);
+        link.setAttribute('download', `relatorio_${tipo}_${ano}_${mes.toString().padStart(2, '0')}.pdf`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -231,8 +253,8 @@ export const sindicoService = {
         console.error('Erro ao baixar PDF real:', err);
       }
     }
-    
+
     // Fallback
-    alert('Relatório mensal gerado com sucesso! (Modo Simulação: PDF seria baixado automaticamente do backend em produção).');
+    alert(`Relatório de ${tipo} gerado com sucesso! (Modo Simulação: PDF seria baixado automaticamente do backend em produção).`);
   }
 };
