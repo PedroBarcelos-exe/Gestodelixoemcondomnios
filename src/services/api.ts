@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { toast } from 'sonner';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -50,7 +50,7 @@ api.interceptors.response.use(
  */
 export async function isApiOnline(): Promise<boolean> {
   try {
-    const res = await axios.get(`${API_URL}/`, { timeout: 1000 });
+    const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/`, { timeout: 1000 });
     return res.data?.status === 'online';
   } catch {
     return false;
