@@ -33,28 +33,38 @@ Este projeto foi desenvolvido como atividade acadêmica, aplicando conceitos de 
 
 ## Tecnologias utilizadas
 
-- Java
+- TypeScript
 - Python
 - React
 - Git
 - GitHub
 - Supabase
 
-##  Como executar
+Como executar o projeto
 
-1. Clone o repositório
+### Clone o repositório
 
 ```bash
 git clone https://github.com/PedroBarcelos-exe/Gestodelixoemcondomnios.git
 ```
 
-2. Abra o projeto em uma IDE Java (IntelliJ IDEA, Eclipse ou NetBeans).
+### Acesse o diretório
 
-3. Compile o projeto.
+```bash
+cd Gestodelixoemcondomnios
+```
 
-4. Execute a classe principal (`Main.java`).
+### Instale as dependências
 
----
+```bash
+npm install
+```
+
+### Inicie o frontend
+
+```bash
+npm run dev
+```
 
 ##  Benefícios do sistema
 
